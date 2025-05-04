@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FaSun, FaMoon, FaExchangeAlt } from 'react-icons/fa';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import './App.css';
 
 const fiatSymbols = ["USD", "EUR", "GBP", "JPY", "TRY", "AUD", "CAD"];
@@ -22,6 +23,11 @@ function App() {
     return localStorage.getItem("theme") || "light";
   });
 
+  const formatDate = (input) => {
+    const date = new Date(input);
+    return date.toLocaleDateString('en-GB');
+  }
+
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     localStorage.setItem("theme", theme);
@@ -35,6 +41,7 @@ function App() {
     setConverted(null);
     setConvertedAmount(null);
     setLastUpdated(null);
+    setChartData([]);
   };
 
   const [amount, setAmount] = useState("");
@@ -44,6 +51,24 @@ function App() {
   const [convertedAmount, setConvertedAmount] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [conversionType, setConversionType] = useState("");
+  const [chartData, setChartData] = useState([]);
+
+  const fetchChartData = async (coinId, vsCurrency, invert = false) => {
+    try {
+      const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=${vsCurrency.toLowerCase()}&days=7`);
+      const data = await res.json();
+
+      const formatted = data.prices.map(([timestamp, price]) => ({
+        date: new Date(timestamp).toLocaleDateString('en-GB'),
+        price: invert ? parseFloat((1 / price).toFixed(8)) : parseFloat(price.toFixed(2)),
+      }));
+
+      setChartData(formatted);
+    } catch (err) {
+      console.error("Chart fetch error:", err);
+      setChartData([]);
+    }
+  };
 
   const handleConvert = async () => {
     if (!amount || isNaN(amount)) return;
@@ -51,7 +76,7 @@ function App() {
     if (fromCurrency === toCurrency) {
       setConverted("1");
       setConvertedAmount(amount);
-      setLastUpdated(new Date().toISOString().slice(0, 10));
+      setLastUpdated(formatDate(new Date()));
       setConversionType("same");
       return;
     }
@@ -70,7 +95,7 @@ function App() {
           setConverted(rate.toFixed(4));
           setConversionType("fiat");
           setConvertedAmount(amount);
-          setLastUpdated(data.date);
+          setLastUpdated(formatDate(data.date));
         } else {
           setConverted("Conversion failed");
         }
@@ -87,7 +112,8 @@ function App() {
           setConverted(result.toFixed(4));
           setConversionType("crypto-to-fiat");
           setConvertedAmount(amount);
-          setLastUpdated(new Date().toISOString().slice(0, 10));
+          setLastUpdated(formatDate(new Date()));
+          fetchChartData(coinId, toCurrency);
         } else {
           setConverted("Conversion failed");
         }
@@ -104,7 +130,8 @@ function App() {
           setConverted(result.toFixed(8));
           setConversionType("fiat-to-crypto");
           setConvertedAmount(amount);
-          setLastUpdated(new Date().toISOString().slice(0, 10));
+          setLastUpdated(formatDate(new Date()));
+          fetchChartData(coinId, fromCurrency, true);
         } else {
           setConverted("Conversion failed");
         }
@@ -126,7 +153,8 @@ function App() {
           setConverted(result.toFixed(8));
           setConversionType("crypto-to-crypto");
           setConvertedAmount(amount);
-          setLastUpdated(new Date().toISOString().slice(0, 10));
+          setLastUpdated(formatDate(new Date()));
+          fetchChartData(fromId, toCurrency);
         } else {
           setConverted("Conversion failed");
         }
@@ -281,8 +309,27 @@ function App() {
 
             </div>
 
-            <div className="flex items-center justify-center min-h-[300px] border border-dashed border-gray-400 dark:border-gray-600 rounded">
-              <span className="text-gray-500 dark:text-gray-400">Chart will go here</span>
+            <div className="min-h-[300px] bg-zinc-100 dark:bg-zinc-800 rounded shadow p-4">
+              {converted && (cryptoSymbols.includes(fromCurrency) || cryptoSymbols.includes(toCurrency)) && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-2 italic">
+                  Showing {cryptoSymbols.includes(fromCurrency) ? fromCurrency : toCurrency} price in {cryptoSymbols.includes(fromCurrency) ? toCurrency : fromCurrency}
+                </p>
+              )}
+
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={chartData}>
+                    <XAxis dataKey="date" />
+                    <YAxis domain={["auto", "auto"]} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="price" stroke="#10b981" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <span className='text-gray-500 dark:text-gray-400'>
+                  No chart data to display
+                </span>
+              )}
             </div>
           </div>
       </main>
