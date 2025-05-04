@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  @apply bg-white text-black;
+}
+
+.dark {
+  @apply bg-zinc-900 text-white;
+}
